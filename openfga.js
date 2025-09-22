@@ -1,4 +1,6 @@
 import { OpenFgaClient } from '@openfga/sdk';
+import dotenv from "dotenv";
+dotenv.config();
 
 export const fgaClient = new OpenFgaClient({
   apiUrl: 'http://localhost:8080', // required

@@ -7,10 +7,12 @@ import {
   getAllFileRecords,
   getFileRecordById,
 } from "./db.js";
-  require('dotenv').config();
+import dotenv from "dotenv";
+dotenv.config();
+import { fgaClient } from "./openfga.js";
 
 const app = express();
-const PORT =  8000;
+const PORT = 8000;
 
 app.use(express.json());
 app.use(express.static(path.resolve("./public")));
@@ -19,40 +21,75 @@ app.use(authMiddleware);
 app.get("/files", async (req, res) => {
   if (!req.user) return res.status(401).json({ error: "Please login" });
 
-  const files = await getAllFileRecords();
 
-  return res.status(200).json({ files });
+ const allowedFiles = await fgaClient.listObjects({
+    user: `user:${req.user.username}`,
+    relation: 'can_view',
+    type: 'file'
+  })
+
+  const allowedFileIds = allowedFiles.objects.map((obj) => obj.split(':')[1])
+
+  const files = await getAllFileRecords();
+  const allowed = files.filter(e => allowedFileIds.includes(e.id))
+
+
+  return res.status(200).json({ files: allowed });
 });
 
-app.post('/share-file', (req, res) => {
-    if(!req.user) return res.status(401).json({error: 'Please logic'});
+app.post("/share-file", async(req, res) => {
+  if (!req.user) return res.status(401).json({ error: "Please login" });
 
-    const {id, username} = req.body;
-})
+  const { id, username } = req.body;
 
-app.post('/create-file', async(req, res) => {
-    if(!req.user) return res.status(401).json({error: 'Please login'})
+  //give someone viewer access
+    await fgaClient.write({
+    writes: [
+      {
+        user: `user:${username}`,
+        relation: "viewer",
+        object: `file:${id}`,
+      },
+    ],
+  });
 
-    const {id, filename} = req.body;
-    const existingFile = await getFileRecordById(id);
+  return res.status(200).json({message: "Access added"})
+  
+});
 
-    if(existingFile){
-        return res.status(400).json({error: `file with ${id} already exists`})
-    }
+app.post("/create-file", async (req, res) => {
+  if (!req.user) return res.status(401).json({ error: "Please login" });
 
-    await createFileRecord({id, filename})
+  const { id, filename } = req.body;
+  const existingFile = await getFileRecordById(id);
 
-    return res.status(201).json({message: 'File created success'})
+  if (existingFile) {
+    return res.status(400).json({ error: `file with ${id} already exists` });
+  }
 
-})
+  await createFileRecord({ id, filename });
 
-app.post('/signup', (req, res) => {
-    const {username, email} = req.body;
-    const token = jwt.sign({username, email}, "mysupersecret")
+  //create a tuple (current user -> owner -> file)
+  await fgaClient.write({
+    writes: [
+      {
+        user: `user:${req.user.username}`,
+        relation: "owner",
+        object: `file:${id}`,
+      },
+    ],
+  });
 
-    return res.json({username, token})
-})
+  return res.status(201).json({ message: "File created success" });
+});
+
+app.post("/signup", (req, res) => {
+  const { username, email } = req.body;
+  const token = jwt.sign({ username, email }, "mysupersecret");
+
+  return res.json({ username, token });
+});
 
 app.listen(PORT, () => {
-    console.log(`Server is running at PORT: ${PORT}`)
-})
+  console.log(`Server is running at PORT: ${PORT}`);
+});
