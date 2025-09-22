@@ -21,29 +21,27 @@ app.use(authMiddleware);
 app.get("/files", async (req, res) => {
   if (!req.user) return res.status(401).json({ error: "Please login" });
 
-
- const allowedFiles = await fgaClient.listObjects({
+  const allowedFiles = await fgaClient.listObjects({
     user: `user:${req.user.username}`,
-    relation: 'can_view',
-    type: 'file'
-  })
+    relation: "can_view",
+    type: "file",
+  });
 
-  const allowedFileIds = allowedFiles.objects.map((obj) => obj.split(':')[1])
+  const allowedFileIds = allowedFiles.objects.map((obj) => obj.split(":")[1]);
 
   const files = await getAllFileRecords();
-  const allowed = files.filter(e => allowedFileIds.includes(e.id))
-
+  const allowed = files.filter((e) => allowedFileIds.includes(e.id));
 
   return res.status(200).json({ files: allowed });
 });
 
-app.post("/share-file", async(req, res) => {
+app.post("/share-file", async (req, res) => {
   if (!req.user) return res.status(401).json({ error: "Please login" });
 
   const { id, username } = req.body;
 
   //give someone viewer access
-    await fgaClient.write({
+  await fgaClient.write({
     writes: [
       {
         user: `user:${username}`,
@@ -53,8 +51,7 @@ app.post("/share-file", async(req, res) => {
     ],
   });
 
-  return res.status(200).json({message: "Access added"})
-  
+  return res.status(200).json({ message: "Access added" });
 });
 
 app.post("/create-file", async (req, res) => {
@@ -64,7 +61,7 @@ app.post("/create-file", async (req, res) => {
   const existingFile = await getFileRecordById(id);
 
   if (existingFile) {
-    return res.status(400).json({ error: `file with ${id} already exists` });
+    return res.status(400).json({ error: `file with id ${id} already exists` });
   }
 
   await createFileRecord({ id, filename });
